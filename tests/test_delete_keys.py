@@ -133,8 +133,8 @@ def test_delete_filecache_key_multiple_params(temp_cache_dir):
     get_analytics(456, 'views', 'daily')
     assert call_count == 3
 
-    cache.delete_filecache_key(300, 'analytics', get_analytics, 
-                                user_id=123, metric='views', period='daily')
+    cache.delete_filecache_key(300, 'analytics', get_analytics,
+                               user_id=123, metric='views', period='daily')
 
     get_analytics(123, 'views', 'daily')
     assert call_count == 4
@@ -180,7 +180,7 @@ def test_delete_rediscache_key_use_case(redis_docker):
     call_count = 0
 
     @cache.rediscache(seconds=86400).cache_on_arguments(namespace='target')
-    def get_target(latest: bool = False, inst_id: int = None, 
+    def get_target(latest: bool = False, inst_id: int = None,
                    target_id: int = None, key: str = None) -> dict:
         nonlocal call_count
         call_count += 1
@@ -201,10 +201,10 @@ def test_delete_rediscache_key_use_case(redis_docker):
     assert call_count == 2
 
     def _reset_cache_keys(inst_id, target_id, key):
-        cache.delete_rediscache_key(86400, 'target', get_target, 
-                                     latest=True, inst_id=inst_id)
-        cache.delete_rediscache_key(86400, 'target', get_target, 
-                                     target_id=target_id, key=key)
+        cache.delete_rediscache_key(86400, 'target', get_target,
+                                    latest=True, inst_id=inst_id)
+        cache.delete_rediscache_key(86400, 'target', get_target,
+                                    target_id=target_id, key=key)
 
     _reset_cache_keys(123, 456, 'main')
 
@@ -232,7 +232,7 @@ def test_delete_rediscache_key_multiple_params(redis_docker):
     get_order(456, 789, 'pending')
     assert call_count == 3
 
-    cache.delete_rediscache_key(300, 'orders', get_order, 
+    cache.delete_rediscache_key(300, 'orders', get_order,
                                 user_id=123, order_id=789, status='pending')
 
     get_order(123, 789, 'pending')

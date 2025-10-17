@@ -494,6 +494,15 @@ def clear_rediscache(seconds: int | None = None, namespace: str | None = None) -
         logger.debug(f'Cleared {deleted_count} Redis cache keys for namespace "{namespace}"')
 
 
+def set_memorycache_key(seconds: int, namespace: str, fn: Callable[..., Any], value: Any, **kwargs) -> None:
+    """Set a specific cached entry in memory cache.
+    """
+    region = memorycache(seconds)
+    cache_key = key_generator(namespace, fn)(**kwargs)
+    region.set(cache_key, value)
+    logger.debug(f'Set memory cache key for {fn.__name__} in namespace "{namespace}"')
+
+
 def delete_memorycache_key(seconds: int, namespace: str, fn: Callable[..., Any], **kwargs) -> None:
     """Delete a specific cached entry from memory cache.
     """
@@ -503,6 +512,15 @@ def delete_memorycache_key(seconds: int, namespace: str, fn: Callable[..., Any],
     logger.debug(f'Deleted memory cache key for {fn.__name__} in namespace "{namespace}"')
 
 
+def set_filecache_key(seconds: int, namespace: str, fn: Callable[..., Any], value: Any, **kwargs) -> None:
+    """Set a specific cached entry in file cache.
+    """
+    region = filecache(seconds)
+    cache_key = key_generator(namespace, fn)(**kwargs)
+    region.set(cache_key, value)
+    logger.debug(f'Set file cache key for {fn.__name__} in namespace "{namespace}"')
+
+
 def delete_filecache_key(seconds: int, namespace: str, fn: Callable[..., Any], **kwargs) -> None:
     """Delete a specific cached entry from file cache.
     """
@@ -510,6 +528,15 @@ def delete_filecache_key(seconds: int, namespace: str, fn: Callable[..., Any], *
     cache_key = key_generator(namespace, fn)(**kwargs)
     region.delete(cache_key)
     logger.debug(f'Deleted file cache key for {fn.__name__} in namespace "{namespace}"')
+
+
+def set_rediscache_key(seconds: int, namespace: str, fn: Callable[..., Any], value: Any, **kwargs) -> None:
+    """Set a specific cached entry in redis cache.
+    """
+    region = rediscache(seconds)
+    cache_key = key_generator(namespace, fn)(**kwargs)
+    region.set(cache_key, value)
+    logger.debug(f'Set redis cache key for {fn.__name__} in namespace "{namespace}"')
 
 
 def delete_rediscache_key(seconds: int, namespace: str, fn: Callable[..., Any], **kwargs) -> None:

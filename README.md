@@ -179,6 +179,55 @@ clear_memorycache(namespace="users")
 | `None`    | `None`      | Clears all keys in all regions                              |
 | `None`    | `"users"`   | Clears "users" namespace keys across all regions            |
 
+### Setting Specific Keys
+
+Set cache values directly without calling the cached function:
+
+```python
+from cache import set_memorycache_key, set_filecache_key, set_rediscache_key
+
+@memorycache(seconds=300).cache_on_arguments(namespace="users")
+def get_user_profile(user_id):
+    return fetch_user_from_db(user_id)
+
+# Cache initial data
+profile = get_user_profile(123)  # Cached
+
+# Update cache directly without fetching from DB
+updated_profile = {'id': 123, 'name': 'John Doe', 'email': 'john@example.com'}
+set_memorycache_key(300, "users", get_user_profile, updated_profile, user_id=123)
+
+# Next call returns updated data from cache
+profile = get_user_profile(123)  # Returns updated_profile
+```
+
+**Multiple parameters:**
+
+```python
+@rediscache(seconds=86400).cache_on_arguments(namespace="analytics")
+def get_metrics(user_id, metric_type, period="daily"):
+    return calculate_metrics(user_id, metric_type, period)
+
+# Set specific cached metrics directly
+new_metrics = {'views': 1500, 'clicks': 250}
+set_rediscache_key(
+    86400,
+    "analytics",
+    get_metrics,
+    new_metrics,
+    user_id=123,
+    metric_type="views",
+    period="daily"
+)
+```
+
+**When to use:**
+
+- **Pre-warming cache**: Populate cache with computed values during off-peak hours
+- **External updates**: Update cache when data changes through external means (webhooks, message queues)
+- **Optimistic updates**: Update cache immediately with expected values before async operations complete
+- **Batch updates**: Efficiently update multiple cache entries with pre-computed values
+
 ### Deleting Specific Keys
 
 Delete individual cache entries by providing the exact parameters used when caching:
@@ -224,10 +273,11 @@ delete_rediscache_key(
 - **Selective invalidation**: When you need to invalidate one cache entry without affecting others
 - **Precise control**: When clearing an entire namespace or region would be too broad
 
-**Key deletion vs clearing:**
+**Key operations comparison:**
 
 | Operation              | Scope                                    | Use Case                           |
 | ---------------------- | ---------------------------------------- | ---------------------------------- |
+| `set_*_key()`          | Single cache entry with exact parameters | Update cache with new value        |
 | `delete_*_key()`       | Single cache entry with exact parameters | User updates their profile         |
 | `clear_*(namespace=X)` | All keys in namespace across region(s)   | All user data needs refresh        |
 | `clear_*(seconds=X)`   | All keys in specific time-based region   | Region-wide cache invalidation     |
