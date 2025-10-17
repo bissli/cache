@@ -7,15 +7,15 @@ from dataclasses import dataclass
 class CacheConfig:
     """Configuration for cache backends.
     """
-    debug_key: str = ""
-    memory: str = "dogpile.cache.memory"
-    redis: str = "dogpile.cache.redis"
-    redis_host: str = "localhost"
+    debug_key: str = ''
+    memory: str = 'dogpile.cache.null'
+    redis: str = 'dogpile.cache.null'
+    redis_host: str = 'localhost'
     redis_port: int = 6379
     redis_db: int = 0
     redis_distributed: bool = False
     redis_ssl: bool = False
-    tmpdir: str = "/tmp"
+    tmpdir: str = '/tmp'
 
 
 _config = CacheConfig()
@@ -32,8 +32,8 @@ def configure(**kwargs) -> None:
 
     Args:
         debug_key: Prefix for cache keys (default: "")
-        memory: Backend for memory cache (default: "dogpile.cache.memory")
-        redis: Backend for redis cache (default: "dogpile.cache.redis")
+        memory: Backend for memory cache (default: "dogpile.cache.null", set to "dogpile.cache.memory_pickle" to enable)
+        redis: Backend for redis cache (default: "dogpile.cache.null", set to "dogpile.cache.redis" to enable)
         redis_host: Redis server hostname (default: "localhost")
         redis_port: Redis server port (default: 6379)
         redis_db: Redis database number (default: 0)

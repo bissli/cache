@@ -52,21 +52,39 @@ import cache
 
 cache.configure(
     debug_key="v1:",
-    memory="dogpile.cache.memory",
-    redis="dogpile.cache.redis",
+    tmpdir="/var/cache/myapp"
+)
+```
+
+**To enable memory caching**, you must explicitly set the memory backend:
+
+```python
+import cache
+
+cache.configure(
+    memory="dogpile.cache.memory_pickle",  # Required to enable memory cache
+)
+```
+
+**To enable Redis caching**, you must explicitly set the Redis backend:
+
+```python
+import cache
+
+cache.configure(
+    redis="dogpile.cache.redis",  # Required to enable Redis
     redis_host="localhost",
     redis_port=6379,
     redis_db=0,
     redis_ssl=False,
-    redis_distributed=False,
-    tmpdir="/var/cache/myapp"
+    redis_distributed=False
 )
 ```
 
 Available configuration options:
 - `debug_key`: Prefix for cache keys (default: "")
-- `memory`: Backend for memory cache (default: "dogpile.cache.memory")
-- `redis`: Backend for redis cache (default: "dogpile.cache.redis")
+- `memory`: Backend for memory cache (default: "dogpile.cache.null", must be set to "dogpile.cache.memory_pickle" to enable memory caching)
+- `redis`: Backend for redis cache (default: "dogpile.cache.null", must be set to "dogpile.cache.redis" to enable Redis)
 - `redis_host`: Redis server hostname (default: "localhost")
 - `redis_port`: Redis server port (default: 6379)
 - `redis_db`: Redis database number (default: 0)

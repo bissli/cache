@@ -16,14 +16,19 @@ site.addsitedir(HERE)
 
 
 @pytest.fixture(autouse=True)
-def reset_cache_config():
+def reset_cache_config(request):
     """Reset cache configuration and clear cache regions before each test.
     """
     cache.cache._memory_cache_regions.clear()
     cache.cache._file_cache_regions.clear()
     cache.cache._redis_cache_regions.clear()
+
+    is_redis_test = 'redis' in [marker.name for marker in request.node.iter_markers()]
+
     cache.configure(
         debug_key='test:',
+        memory='dogpile.cache.memory_pickle',
+        redis='dogpile.cache.redis' if is_redis_test else 'dogpile.cache.null',
         tmpdir=tempfile.gettempdir(),
         redis_host='localhost',
         redis_port=6379,
@@ -37,6 +42,8 @@ def reset_cache_config():
     cache.cache._redis_cache_regions.clear()
     cache.configure(
         debug_key='',
+        memory='dogpile.cache.null',
+        redis='dogpile.cache.null',
         tmpdir='/tmp',
         redis_host='localhost',
         redis_port=6379,

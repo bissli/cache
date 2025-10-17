@@ -7,10 +7,11 @@ import pytest
 def test_default_configuration():
     """Verify default configuration values are set correctly.
     """
-    config = cache.get_config()
-    assert config.memory == 'dogpile.cache.memory'
-    assert config.redis == 'dogpile.cache.redis'
-    assert config.tmpdir == '/tmp'
+    from cache.config import CacheConfig
+    default_config = CacheConfig()
+    assert default_config.memory == 'dogpile.cache.null'
+    assert default_config.redis == 'dogpile.cache.null'
+    assert default_config.tmpdir == '/tmp'
 
 
 def test_configure_updates_settings():
