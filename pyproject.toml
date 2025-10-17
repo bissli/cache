@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "libb-cache"
+version = "0.1.0"
+readme = "README.md"
+description = "Flexible caching library built on dogpile.cache"
+repository = "https://github.com/bissli/libb-cache.git"
+authors = ["bissli"]
+license = "0BSD"
+packages = [{ include = "cache", from = 'src' }]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+database = { git = "https://github.com/bissli/database" }
+"dogpile.cache" = "*"
+func-timeout = "*"
+redis = { version = "*", optional = true }
+
+[tool.poetry.extras]
+redis = ["redis"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+pytest-mock = "*"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
