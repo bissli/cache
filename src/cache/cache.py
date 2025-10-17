@@ -19,6 +19,45 @@ from .config import get_config
 logger = logging.getLogger(__name__)
 
 
+def _normalize_namespace(namespace: str) -> str:
+    """Normalize namespace to always be wrapped in pipes.
+
+    Parameters
+        namespace: The namespace string to normalize.
+
+    Returns
+        The namespace wrapped in pipes on both sides (e.g., |foo|).
+    """
+    if not namespace:
+        return ''
+    namespace = namespace.strip('|')
+    namespace = namespace.replace('|', '.')
+    return f'|{namespace}|'
+
+
+def _create_namespace_filter(namespace: str) -> Callable[[str], bool]:
+    """Create a filter function for namespace-based key matching.
+
+    Parameters
+        namespace: The namespace to filter by.
+
+    Returns
+        A function that returns True if a key matches the namespace.
+    """
+    _config = get_config()
+    debug_prefix = _config.debug_key
+    normalized_ns = _normalize_namespace(namespace)
+    namespace_pattern = f'|{normalized_ns}|'
+
+    def matches_namespace(key: str) -> bool:
+        if not key.startswith(debug_prefix):
+            return False
+        key_after_prefix = key[len(debug_prefix):]
+        return namespace_pattern in key_after_prefix
+
+    return matches_namespace
+
+
 def key_generator(namespace: str, fn: Callable[..., Any]) -> Callable[..., str]:
     """Generate a cache key for the given namespace and function.
 
@@ -32,7 +71,7 @@ def key_generator(namespace: str, fn: Callable[..., Any]) -> Callable[..., str]:
     Returns
         A callable that generates a cache key string from the function's arguments.
     """
-    namespace = f'{fn.__name__}|{namespace}' if namespace else f'{fn.__name__}'
+    namespace = f'{fn.__name__}|{_normalize_namespace(namespace)}' if namespace else f'{fn.__name__}'
 
     argspec = inspect.getfullargspec(fn)
     _args_reversed = list(reversed(argspec.args or []))
@@ -323,13 +362,8 @@ def clear_memorycache(seconds: int, namespace: str = None) -> None:
         cache_dict.clear()
         logger.debug(f'Cleared all memory cache keys for {seconds} second region')
     else:
-        _config = get_config()
-        debug_prefix = _config.debug_key
-        namespace_pattern = f'|{namespace}|'
-        keys_to_delete = [
-            key for key in list(cache_dict.keys())
-            if key.startswith(debug_prefix) and namespace_pattern in key[len(debug_prefix):]
-        ]
+        matches_namespace = _create_namespace_filter(namespace)
+        keys_to_delete = [key for key in list(cache_dict.keys()) if matches_namespace(key)]
         for key in keys_to_delete:
             del cache_dict[key]
         logger.debug(f'Cleared {len(keys_to_delete)} memory cache keys for namespace "{namespace}"')
@@ -357,13 +391,11 @@ def clear_filecache(seconds: int, namespace: str = None) -> None:
         db.close()
         logger.debug(f'Cleared all file cache keys for {seconds} second region')
     else:
-        debug_prefix = _config.debug_key
-        namespace_pattern = f'|{namespace}|'
+        matches_namespace = _create_namespace_filter(namespace)
         with dbm.open(filepath, 'w') as db:
             keys_to_delete = [
                 key for key in list(db.keys())
-                if key.decode().startswith(debug_prefix) and
-                namespace_pattern in key.decode()[len(debug_prefix):]
+                if matches_namespace(key.decode())
             ]
             for key in keys_to_delete:
                 del db[key]
@@ -392,12 +424,13 @@ def clear_rediscache(seconds: int, namespace: str = None) -> None:
         client = region.backend.writer_client
         region_name = region.name
         debug_prefix = _config.debug_key
-        namespace_pattern = f'|{namespace.strip("|")}|'
         region_prefix = f'{region_name}:{debug_prefix}'
+        matches_namespace = _create_namespace_filter(namespace)
         deleted_count = 0
         for key in client.scan_iter(match=f'{region_prefix}*'):
             key_str = key.decode()
-            if namespace_pattern in key_str[len(region_prefix):]:
+            key_without_region = key_str[len(region_name) + 1:]
+            if matches_namespace(key_without_region):
                 client.delete(key)
                 deleted_count += 1
         logger.debug(f'Cleared {deleted_count} Redis cache keys for namespace "{namespace}"')
