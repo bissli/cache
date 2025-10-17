@@ -4,7 +4,7 @@ import logging
 import os
 import pathlib
 from collections.abc import Callable
-from functools import partial
+from functools import partial, wraps
 from typing import Any
 
 import database as db
@@ -235,6 +235,38 @@ class RedisInvalidator(DefaultInvalidationStrategy):
         logger.debug(f'Deleted {deleted_count} Redis keys for region "{self.region.name}"')
 
 
+def _handle_all_regions(regions_dict: dict, log_level: str = 'warning'):
+    """Decorator to handle clearing all cache regions when seconds=None.
+
+    When seconds=None, iterates through all regions in the dictionary and calls
+    the decorated function for each one. Otherwise passes through to the
+    original function.
+
+    Parameters
+        regions_dict: Dictionary of cache regions keyed by seconds
+        log_level: Logging level to use when no regions exist (default 'warning')
+
+    Returns
+        Decorator function that wraps cache clearing functions
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(seconds: int = None, namespace: str = None) -> None:
+            if seconds is None:
+                regions_to_clear = list(regions_dict.keys())
+                if not regions_to_clear:
+                    log_func = getattr(logger, log_level)
+                    cache_type = func.__name__.replace('clear_', '').replace('cache', ' cache')
+                    log_func(f'No{cache_type} regions exist')
+                    return
+                for region_seconds in regions_to_clear:
+                    wrapper(region_seconds, namespace)
+                return
+            return func(seconds, namespace)
+        return wrapper
+    return decorator
+
+
 _memory_cache_regions = {}
 
 
@@ -344,13 +376,15 @@ def rediscache(seconds: int) -> CacheRegion:
     return _redis_cache_regions[seconds]
 
 
-def clear_memorycache(seconds: int, namespace: str = None) -> None:
-    """Clear a specific memory cache region.
+@_handle_all_regions(_memory_cache_regions)
+def clear_memorycache(seconds: int | None = None, namespace: str | None = None) -> None:
+    """Clear a memory cache region.
+
+    When decorated, supports seconds=None to clear all regions.
 
     Parameters
-        seconds: Expiration time in seconds that identifies the specific region to clear
-        namespace: Optional namespace to filter which keys to clear. If provided,
-                  only keys matching this namespace will be cleared.
+        seconds: Expiration time in seconds that identifies the region to clear
+        namespace: Optional namespace to filter which keys to clear
     """
     if seconds not in _memory_cache_regions:
         logger.warning(f'No memory cache region exists for {seconds} seconds')
@@ -369,13 +403,15 @@ def clear_memorycache(seconds: int, namespace: str = None) -> None:
         logger.debug(f'Cleared {len(keys_to_delete)} memory cache keys for namespace "{namespace}"')
 
 
-def clear_filecache(seconds: int, namespace: str = None) -> None:
-    """Clear a specific file cache region.
+@_handle_all_regions(_file_cache_regions)
+def clear_filecache(seconds: int | None = None, namespace: str | None = None) -> None:
+    """Clear a file cache region.
+
+    When decorated, supports seconds=None to clear all regions.
 
     Parameters
-        seconds: Expiration time in seconds that identifies the specific region to clear
-        namespace: Optional namespace to filter which keys to clear. If provided,
-                  only keys matching this namespace will be cleared.
+        seconds: Expiration time in seconds that identifies the region to clear
+        namespace: Optional namespace to filter which keys to clear
     """
     if seconds not in _file_cache_regions:
         logger.warning(f'No file cache region exists for {seconds} seconds')
@@ -402,13 +438,15 @@ def clear_filecache(seconds: int, namespace: str = None) -> None:
         logger.debug(f'Cleared {len(keys_to_delete)} file cache keys for namespace "{namespace}"')
 
 
-def clear_rediscache(seconds: int, namespace: str = None) -> None:
-    """Clear a specific redis cache region.
+@_handle_all_regions(_redis_cache_regions, log_level='info')
+def clear_rediscache(seconds: int | None = None, namespace: str | None = None) -> None:
+    """Clear a redis cache region.
+
+    When decorated, supports seconds=None to clear all regions.
 
     Parameters
-        seconds: Expiration time in seconds that identifies the specific region to clear
-        namespace: Optional namespace to filter which keys to clear. If provided,
-                  only keys matching this namespace will be cleared.
+        seconds: Expiration time in seconds that identifies the region to clear
+        namespace: Optional namespace to filter which keys to clear
     """
     if seconds not in _redis_cache_regions:
         logger.info(f'No redis cache region exists for {seconds} seconds')
