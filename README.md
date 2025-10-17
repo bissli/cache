@@ -138,7 +138,7 @@ The library automatically filters out implementation details from cache keys, en
 
 **Automatic filtering:**
 - `self` and `cls` parameters (for instance and class methods)
-- Database connection objects (detected by `database.isconnection()`)
+- Database connection objects (detected using heuristics: objects with `driver_connection`, `dialect`, or `engine` attributes, or types containing 'Connection', 'Engine', 'psycopg', 'pyodbc', or 'sqlite3')
 - Parameters starting with underscore (`_`)
 
 **Instance methods:**

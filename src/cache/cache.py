@@ -7,7 +7,6 @@ from collections.abc import Callable
 from functools import partial, wraps
 from typing import Any
 
-import database as db
 from dogpile.cache import CacheRegion, make_region
 from dogpile.cache.backends.file import AbstractFileLock
 from dogpile.cache.region import DefaultInvalidationStrategy
@@ -17,6 +16,27 @@ from func_timeout import func_timeout
 from .config import get_config
 
 logger = logging.getLogger(__name__)
+
+
+def _is_connection_like(obj) -> bool:
+    """Check if object appears to be a database connection.
+
+    Uses heuristics to detect common database connection objects without
+    requiring database library imports.
+    """
+    if hasattr(obj, 'driver_connection'):
+        return True
+
+    if hasattr(obj, 'dialect'):
+        return True
+
+    if hasattr(obj, 'engine'):
+        return True
+
+    obj_type = str(type(obj))
+    connection_indicators = ('Connection', 'Engine', 'psycopg', 'pyodbc', 'sqlite3')
+
+    return any(indicator in obj_type for indicator in connection_indicators)
 
 
 def _normalize_namespace(namespace: str) -> str:
@@ -84,7 +104,7 @@ def key_generator(namespace: str, fn: Callable[..., Any]) -> Callable[..., str]:
         as_kwargs.update(dict(zip(argspec.args, args)))
         as_kwargs.update({f'vararg{i+1}': varg for i, varg in enumerate(vargs)})
         as_kwargs.update(**kwargs)
-        as_kwargs = {k: v for k, v in as_kwargs.items() if not db.isconnection(v) and k not in {'self', 'cls'}}
+        as_kwargs = {k: v for k, v in as_kwargs.items() if not _is_connection_like(v) and k not in {'self', 'cls'}}
         as_kwargs = {k: v for k, v in as_kwargs.items() if not k.startswith('_')}
         as_str = ' '.join(f'{str(k)}={str(v)}' for k, v in sorted(as_kwargs.items()))
         return f'{namespace}|{as_str}'

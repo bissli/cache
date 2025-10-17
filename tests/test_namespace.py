@@ -150,3 +150,22 @@ def test_key_generator_filters_underscore_params():
 
     assert 'x=5' in key
     assert '_internal' not in key
+
+
+def test_key_generator_filters_connection_objects():
+    """Verify key generator excludes connection-like objects.
+    """
+    class MockConnection:
+        def __init__(self):
+            self.driver_connection = True
+
+    def func_with_conn(conn, x: int) -> int:
+        return x
+
+    keygen = key_generator('', func_with_conn)
+    mock_conn = MockConnection()
+    key = keygen(mock_conn, 5)
+
+    assert 'x=5' in key
+    assert 'conn=' not in key
+    assert 'MockConnection' not in key

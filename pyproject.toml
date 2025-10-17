@@ -10,7 +10,6 @@ packages = [{ include = "cache", from = 'src' }]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-database = { git = "https://github.com/bissli/database" }
 "dogpile.cache" = "*"
 func-timeout = "*"
 redis = { version = "*", optional = true }
