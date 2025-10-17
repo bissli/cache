@@ -1,9 +1,9 @@
 [tool.poetry]
-name = "libb-cache"
+name = "cache"
 version = "0.1.0"
 readme = "README.md"
 description = "Flexible caching library built on dogpile.cache"
-repository = "https://github.com/bissli/libb-cache.git"
+repository = "https://github.com/bissli/cache.git"
 authors = ["bissli"]
 license = "0BSD"
 packages = [{ include = "cache", from = 'src' }]

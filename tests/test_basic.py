@@ -1,4 +1,4 @@
-"""Basic smoke test for libb-cache.
+"""Basic smoke test for cache.
 """
 import cache
 

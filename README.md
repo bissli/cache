@@ -1,17 +1,17 @@
-# libb-cache
+# cache
 
 Flexible caching library built on dogpile.cache with support for memory, file, and Redis backends.
 
 ## Installation
 
 ```bash
-poetry add git+https://github.com/bissli/libb-cache.git
+poetry add git+https://github.com/bissli/cache.git
 ```
 
 For Redis support:
 
 ```bash
-poetry add git+https://github.com/bissli/libb-cache.git -E redis
+poetry add git+https://github.com/bissli/cache.git -E redis
 ```
 
 ## Configuration
