@@ -4,14 +4,43 @@ Flexible caching library built on dogpile.cache with support for memory, file, a
 
 ## Installation
 
+**Basic installation:**
+
 ```bash
+# Using pip
+pip install git+https://github.com/bissli/cache.git
+
+# Using Poetry
 poetry add git+https://github.com/bissli/cache.git
 ```
 
-For Redis support:
+**With Redis support:**
 
 ```bash
+# Using pip
+pip install git+https://github.com/bissli/cache.git#egg=cache[redis]
+
+# Using Poetry
 poetry add git+https://github.com/bissli/cache.git -E redis
+```
+
+**In pyproject.toml:**
+
+```toml
+[tool.poetry.dependencies]
+cache = {git = "https://github.com/bissli/cache.git"}
+
+# Or with Redis support:
+cache = {git = "https://github.com/bissli/cache.git", extras = ["redis"]}
+```
+
+**In requirements.txt:**
+
+```
+git+https://github.com/bissli/cache.git#egg=cache
+
+# Or with Redis support:
+git+https://github.com/bissli/cache.git#egg=cache[redis]
 ```
 
 ## Configuration
