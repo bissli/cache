@@ -494,5 +494,32 @@ def clear_rediscache(seconds: int | None = None, namespace: str | None = None) -
         logger.debug(f'Cleared {deleted_count} Redis cache keys for namespace "{namespace}"')
 
 
+def delete_memorycache_key(seconds: int, namespace: str, fn: Callable[..., Any], **kwargs) -> None:
+    """Delete a specific cached entry from memory cache.
+    """
+    region = memorycache(seconds)
+    cache_key = key_generator(namespace, fn)(**kwargs)
+    region.delete(cache_key)
+    logger.debug(f'Deleted memory cache key for {fn.__name__} in namespace "{namespace}"')
+
+
+def delete_filecache_key(seconds: int, namespace: str, fn: Callable[..., Any], **kwargs) -> None:
+    """Delete a specific cached entry from file cache.
+    """
+    region = filecache(seconds)
+    cache_key = key_generator(namespace, fn)(**kwargs)
+    region.delete(cache_key)
+    logger.debug(f'Deleted file cache key for {fn.__name__} in namespace "{namespace}"')
+
+
+def delete_rediscache_key(seconds: int, namespace: str, fn: Callable[..., Any], **kwargs) -> None:
+    """Delete a specific cached entry from redis cache.
+    """
+    region = rediscache(seconds)
+    cache_key = key_generator(namespace, fn)(**kwargs)
+    region.delete(cache_key)
+    logger.debug(f'Deleted redis cache key for {fn.__name__} in namespace "{namespace}"')
+
+
 if __name__ == '__main__':
     __import__('doctest').testmod(optionflags=4 | 8 | 32)

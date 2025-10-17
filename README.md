@@ -179,6 +179,60 @@ clear_memorycache(namespace="users")
 | `None`    | `None`      | Clears all keys in all regions                              |
 | `None`    | `"users"`   | Clears "users" namespace keys across all regions            |
 
+### Deleting Specific Keys
+
+Delete individual cache entries by providing the exact parameters used when caching:
+
+```python
+from cache import delete_memorycache_key, delete_filecache_key, delete_rediscache_key
+
+@memorycache(seconds=300).cache_on_arguments(namespace="users")
+def get_user_profile(user_id):
+    return fetch_user_from_db(user_id)
+
+# Cache some data
+profile = get_user_profile(123)  # Cached
+
+# Delete specific cache entry when user profile is updated
+delete_memorycache_key(300, "users", get_user_profile, user_id=123)
+
+# Next call will fetch fresh data
+profile = get_user_profile(123)  # Cache miss, fetches from DB
+```
+
+**Multiple parameters:**
+
+```python
+@rediscache(seconds=86400).cache_on_arguments(namespace="analytics")
+def get_metrics(user_id, metric_type, period="daily"):
+    return calculate_metrics(user_id, metric_type, period)
+
+# Delete specific cached metrics
+delete_rediscache_key(
+    86400,
+    "analytics",
+    get_metrics,
+    user_id=123,
+    metric_type="views",
+    period="daily"
+)
+```
+
+**When to use:**
+
+- **Single entry updates**: When specific data changes (e.g., user updates their profile)
+- **Selective invalidation**: When you need to invalidate one cache entry without affecting others
+- **Precise control**: When clearing an entire namespace or region would be too broad
+
+**Key deletion vs clearing:**
+
+| Operation              | Scope                                    | Use Case                           |
+| ---------------------- | ---------------------------------------- | ---------------------------------- |
+| `delete_*_key()`       | Single cache entry with exact parameters | User updates their profile         |
+| `clear_*(namespace=X)` | All keys in namespace across region(s)   | All user data needs refresh        |
+| `clear_*(seconds=X)`   | All keys in specific time-based region   | Region-wide cache invalidation     |
+| `clear_*()`            | All keys in all regions                  | Complete cache reset (development) |
+
 ## Intelligent Parameter Filtering
 
 The library automatically filters out implementation details from cache keys, ensuring keys are based only on meaningful data parameters:
