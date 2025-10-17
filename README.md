@@ -146,6 +146,126 @@ clear_filecache(seconds=3600, namespace="reports")
 clear_rediscache(seconds=86400, namespace="api_data")
 ```
 
+## Class-Friendly Caching
+
+The library automatically handles caching for instance methods, class methods, and static methods by intelligently filtering out method-specific parameters like `self` and `cls`.
+
+**Instance Methods:**
+
+```python
+from cache import memorycache
+
+class UserRepository:
+    def __init__(self, db_connection):
+        self.conn = db_connection
+    
+    @memorycache(seconds=300).cache_on_arguments()
+    def get_user(self, user_id):
+        """Fetch user by ID.
+        
+        The 'self' parameter is automatically excluded from the cache key,
+        so the cache key will only be based on 'user_id'.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        return cursor.fetchone()
+
+# These calls will use the same cache entry (keyed only by user_id=123)
+# even though they are called on different instances
+repo1 = UserRepository(connection1)
+repo2 = UserRepository(connection2)
+
+result1 = repo1.get_user(123)
+result2 = repo2.get_user(123)  # Returns cached result from result1
+```
+
+**Class Methods:**
+
+```python
+from cache import memorycache
+
+class ConfigManager:
+    @classmethod
+    @memorycache(seconds=600).cache_on_arguments()
+    def get_setting(cls, setting_name):
+        """Fetch configuration setting.
+        
+        The 'cls' parameter is automatically excluded from the cache key,
+        so the cache key will only be based on 'setting_name'.
+        """
+        return load_setting_from_file(setting_name)
+
+# These calls will use the same cache entry
+setting1 = ConfigManager.get_setting('timeout')
+setting2 = ConfigManager.get_setting('timeout')  # Returns cached result
+```
+
+**Static Methods:**
+
+```python
+from cache import memorycache
+
+class DataProcessor:
+    @staticmethod
+    @memorycache(seconds=3600).cache_on_arguments()
+    def transform_data(data_format, data):
+        """Transform data based on format.
+        
+        Cache key is based on both 'data_format' and 'data' parameters.
+        """
+        return apply_transformation(data_format, data)
+
+# Standard static method caching
+result = DataProcessor.transform_data('json', raw_data)
+```
+
+**What gets automatically filtered from cache keys:**
+
+- `self` parameter (for instance methods)
+- `cls` parameter (for class methods)
+- Database connection objects (detected by `database.isconnection()`)
+- Any parameter starting with underscore (`_`)
+
+This ensures cache keys are based only on the meaningful data parameters, not on implementation details like instance references or class references.
+
+## Database Connection Handling
+
+The library automatically detects and excludes database connection objects from cache keys. This prevents connection objects from being serialized or included in cache key generation, which would cause caching to fail or produce incorrect keys.
+
+**How it works:**
+
+When generating cache keys, the library uses the `database.isconnection()` function to identify database connection objects among function arguments. Any detected connections are automatically filtered out before key generation.
+
+**Example:**
+
+```python
+from cache import memorycache
+
+@memorycache(seconds=300).cache_on_arguments()
+def get_user_data(conn, user_id):
+    """Fetch user data from database.
+    
+    The 'conn' parameter will be automatically excluded from the cache key,
+    so the cache key will only be based on 'user_id'.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    return cursor.fetchone()
+
+# These calls will use the same cache entry (keyed only by user_id=123)
+# even though they use different connection objects
+result1 = get_user_data(connection1, 123)
+result2 = get_user_data(connection2, 123)  # Returns cached result from result1
+```
+
+**What gets filtered:**
+
+- Database connection objects (detected by `database.isconnection()`)
+- `self` and `cls` parameters (for instance and class methods)
+- Any parameter starting with underscore (`_`)
+
+This ensures cache keys are based only on the meaningful data parameters, not on implementation details like connection objects.
+
 ## Features
 
 - **Multiple backends**: Memory, file (DBM), and Redis
