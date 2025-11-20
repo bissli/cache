@@ -78,7 +78,7 @@ def _create_namespace_filter(namespace: str) -> Callable[[str], bool]:
     return matches_namespace
 
 
-def key_generator(namespace: str, fn: Callable[..., Any]) -> Callable[..., str]:
+def key_generator(namespace: str, fn: Callable[..., Any], exclude_params: set[str] | None = None) -> Callable[..., str]:
     """Generate a cache key for the given namespace and function.
 
     This function uses the provided function's argument specification to generate
@@ -87,10 +87,12 @@ def key_generator(namespace: str, fn: Callable[..., Any]) -> Callable[..., str]:
     Parameters
         namespace: A string to be prefixed to the key. Can be empty.
         fn: The function for which the key is being generated.
+        exclude_params: Optional set of parameter names to exclude from cache key.
 
     Returns
         A callable that generates a cache key string from the function's arguments.
     """
+    exclude_params = exclude_params or set()
     namespace = f'{fn.__name__}|{_normalize_namespace(namespace)}' if namespace else f'{fn.__name__}'
 
     argspec = inspect.getfullargspec(fn)
@@ -98,14 +100,14 @@ def key_generator(namespace: str, fn: Callable[..., Any]) -> Callable[..., str]:
     _defaults_reversed = list(reversed(argspec.defaults or []))
     args_with_defaults = { _args_reversed[i]: default for i, default in enumerate(_defaults_reversed)}
 
-    def generate_key(*args, **kwargs):
+    def generate_key(*args, **kwargs) -> str:
         args, vargs = args[:len(argspec.args)], args[len(argspec.args):]
         as_kwargs = dict(**args_with_defaults)
         as_kwargs.update(dict(zip(argspec.args, args)))
         as_kwargs.update({f'vararg{i+1}': varg for i, varg in enumerate(vargs)})
         as_kwargs.update(**kwargs)
         as_kwargs = {k: v for k, v in as_kwargs.items() if not _is_connection_like(v) and k not in {'self', 'cls'}}
-        as_kwargs = {k: v for k, v in as_kwargs.items() if not k.startswith('_')}
+        as_kwargs = {k: v for k, v in as_kwargs.items() if not k.startswith('_') and k not in exclude_params}
         as_str = ' '.join(f'{str(k)}={str(v)}' for k, v in sorted(as_kwargs.items()))
         return f'{namespace}|{as_str}'
 
@@ -162,7 +164,10 @@ def _wrap_cache_on_arguments(region: CacheRegion) -> CacheRegion:
     """
     original_cache_on_arguments = region.cache_on_arguments
 
-    def cache_on_arguments_with_default(namespace: str = '', should_cache_fn: Callable[[Any], bool] = should_cache_fn, **kwargs):
+    def cache_on_arguments_with_default(namespace: str = '', should_cache_fn: Callable[[Any], bool] = should_cache_fn, exclude_params: set[str] | None = None, **kwargs) -> Callable:
+        if exclude_params:
+            custom_key_gen = partial(key_generator, exclude_params=exclude_params)
+            return original_cache_on_arguments(namespace=namespace, should_cache_fn=should_cache_fn, function_key_generator=custom_key_gen, **kwargs)
         return original_cache_on_arguments(namespace=namespace, should_cache_fn=should_cache_fn, **kwargs)
 
     region.cache_on_arguments = cache_on_arguments_with_default
@@ -255,7 +260,7 @@ class RedisInvalidator(DefaultInvalidationStrategy):
         logger.debug(f'Deleted {deleted_count} Redis keys for region "{self.region.name}"')
 
 
-def _handle_all_regions(regions_dict: dict, log_level: str = 'warning'):
+def _handle_all_regions(regions_dict: dict[int, CacheRegion], log_level: str = 'warning') -> Callable:
     """Decorator to handle clearing all cache regions when seconds=None.
 
     When seconds=None, iterates through all regions in the dictionary and calls
@@ -269,7 +274,7 @@ def _handle_all_regions(regions_dict: dict, log_level: str = 'warning'):
     Returns
         Decorator function that wraps cache clearing functions
     """
-    def decorator(func):
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(seconds: int = None, namespace: str = None) -> None:
             if seconds is None:
