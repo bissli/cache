@@ -153,25 +153,46 @@ def should_cache_fn(value: Any) -> bool:
     return bool(value)
 
 
-def _wrap_cache_on_arguments(region: CacheRegion) -> CacheRegion:
-    """Wrap the `cache_on_arguments` method of a CacheRegion instance to inject a default should_cache_fn.
-
-    Parameters
-        region: A dogpile.cache.CacheRegion instance to wrap.
-
-    Returns
-        The wrapped CacheRegion instance with an updated cache_on_arguments method.
+class CacheRegionWrapper:
+    """Wrapper for CacheRegion that adds exclude_params support to cache_on_arguments.
     """
-    original_cache_on_arguments = region.cache_on_arguments
+    def __init__(self, region: CacheRegion) -> None:
+        self._region = region
+        self._original_cache_on_arguments = region.cache_on_arguments
 
-    def cache_on_arguments_with_default(namespace: str = '', should_cache_fn: Callable[[Any], bool] = should_cache_fn, exclude_params: set[str] | None = None, **kwargs) -> Callable:
+    def cache_on_arguments(
+        self,
+        namespace: str = '',
+        should_cache_fn: Callable[[Any], bool] = should_cache_fn,
+        exclude_params: set[str] | None = None,
+        **kwargs
+    ) -> Callable:
+        """Cache function results based on arguments with optional parameter exclusion.
+        """
         if exclude_params:
             custom_key_gen = partial(key_generator, exclude_params=exclude_params)
-            return original_cache_on_arguments(namespace=namespace, should_cache_fn=should_cache_fn, function_key_generator=custom_key_gen, **kwargs)
-        return original_cache_on_arguments(namespace=namespace, should_cache_fn=should_cache_fn, **kwargs)
+            return self._original_cache_on_arguments(
+                namespace=namespace,
+                should_cache_fn=should_cache_fn,
+                function_key_generator=custom_key_gen,
+                **kwargs
+            )
+        return self._original_cache_on_arguments(
+            namespace=namespace,
+            should_cache_fn=should_cache_fn,
+            **kwargs
+        )
 
-    region.cache_on_arguments = cache_on_arguments_with_default
-    return region
+    def __getattr__(self, name: str) -> Any:
+        """Delegate all other attributes to the wrapped region.
+        """
+        return getattr(self._region, name)
+
+
+def _wrap_cache_on_arguments(region: CacheRegion) -> CacheRegionWrapper:
+    """Wrap CacheRegion to add exclude_params support with proper IDE typing.
+    """
+    return CacheRegionWrapper(region)
 
 
 class CustomFileLock(AbstractFileLock):
@@ -295,14 +316,14 @@ def _handle_all_regions(regions_dict: dict[int, CacheRegion], log_level: str = '
 _memory_cache_regions = {}
 
 
-def memorycache(seconds: int) -> CacheRegion:
+def memorycache(seconds: int) -> CacheRegionWrapper:
     """Create or retrieve a memory cache region with a specified expiration time.
 
     Parameters
         seconds: The expiration time in seconds for caching.
 
     Returns
-        A configured memory cache region (dogpile.cache.CacheRegion).
+        A configured memory cache region wrapper.
     """
     if seconds not in _memory_cache_regions:
         _config = get_config()
@@ -320,14 +341,14 @@ def memorycache(seconds: int) -> CacheRegion:
 _file_cache_regions = {}
 
 
-def filecache(seconds: int) -> CacheRegion:
+def filecache(seconds: int) -> CacheRegionWrapper:
     """Create or retrieve a file cache region with a specified expiration time.
 
     Parameters
         seconds: The expiration time in seconds for caching.
 
     Returns
-        A configured file cache region (dogpile.cache.CacheRegion).
+        A configured file cache region wrapper.
     """
 
     if seconds < 60:
@@ -357,14 +378,14 @@ def filecache(seconds: int) -> CacheRegion:
 _redis_cache_regions = {}
 
 
-def rediscache(seconds: int) -> CacheRegion:
+def rediscache(seconds: int) -> CacheRegionWrapper:
     """Create or retrieve a Redis cache region with a specified expiration time.
 
     Parameters
         seconds: The expiration time in seconds for caching.
 
     Returns
-        A configured Redis cache region (dogpile.cache.CacheRegion).
+        A configured Redis cache region wrapper.
     """
     if seconds not in _redis_cache_regions:
         _config = get_config()

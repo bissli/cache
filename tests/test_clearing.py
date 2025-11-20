@@ -1,8 +1,7 @@
 """Test cache clearing across all backends.
 """
-import pytest
-
 import cache
+import pytest
 
 
 def test_clear_memory_cache_all_keys():

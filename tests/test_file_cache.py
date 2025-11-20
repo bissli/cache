@@ -1,9 +1,10 @@
 """Test file cache backend operations.
 """
 import os
+import pathlib
 
 import cache
-import pathlib
+import pytest
 
 
 def test_file_cache_basic_decoration(temp_cache_dir):
@@ -38,32 +39,22 @@ def test_file_cache_creates_dbm_file(temp_cache_dir):
     assert len(cache_files) > 0
 
 
-def test_file_cache_naming_convention():
+@pytest.mark.parametrize(('seconds', 'expected_name'), [
+    (30, 'cache30sec'),
+    (120, 'cache2min'),
+    (7200, 'cache2hour'),
+])
+def test_file_cache_naming_convention(seconds, expected_name):
     """Verify file cache uses correct naming convention for different expiration times.
     """
-    @cache.filecache(seconds=30).cache_on_arguments()
-    def func1(x: int) -> int:
+    @cache.filecache(seconds=seconds).cache_on_arguments()
+    def func(x: int) -> int:
         return x
 
-    @cache.filecache(seconds=120).cache_on_arguments()
-    def func2(x: int) -> int:
-        return x
+    func(1)
 
-    @cache.filecache(seconds=7200).cache_on_arguments()
-    def func3(x: int) -> int:
-        return x
-
-    func1(1)
-    func2(2)
-    func3(3)
-
-    region30 = cache.cache._file_cache_regions[30]
-    region120 = cache.cache._file_cache_regions[120]
-    region7200 = cache.cache._file_cache_regions[7200]
-
-    assert 'cache30sec' in region30.actual_backend.filename
-    assert 'cache2min' in region120.actual_backend.filename
-    assert 'cache2hour' in region7200.actual_backend.filename
+    region = cache.cache._file_cache_regions[seconds]
+    assert expected_name in region.actual_backend.filename
 
 
 def test_file_cache_persists_across_region_recreation(temp_cache_dir):

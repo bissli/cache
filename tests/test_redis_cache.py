@@ -25,39 +25,23 @@ def test_redis_cache_basic_decoration(redis_docker):
     assert call_count == 1
 
 
-def test_redis_cache_naming_convention(redis_docker):
+@pytest.mark.parametrize('seconds,expected_name', [
+    (30, '30s'),
+    (120, '2m'),
+    (7200, '2h'),
+    (172800, '2d'),
+])
+def test_redis_cache_naming_convention(redis_docker, seconds, expected_name):
     """Verify Redis cache uses correct naming convention for regions.
     """
-    @cache.rediscache(seconds=30).cache_on_arguments()
-    def func1(x: int) -> int:
+    @cache.rediscache(seconds=seconds).cache_on_arguments()
+    def func(x: int) -> int:
         return x
 
-    @cache.rediscache(seconds=120).cache_on_arguments()
-    def func2(x: int) -> int:
-        return x
+    func(1)
 
-    @cache.rediscache(seconds=7200).cache_on_arguments()
-    def func3(x: int) -> int:
-        return x
-
-    @cache.rediscache(seconds=172800).cache_on_arguments()
-    def func4(x: int) -> int:
-        return x
-
-    func1(1)
-    func2(2)
-    func3(3)
-    func4(4)
-
-    region30 = cache.cache._redis_cache_regions[30]
-    region120 = cache.cache._redis_cache_regions[120]
-    region7200 = cache.cache._redis_cache_regions[7200]
-    region172800 = cache.cache._redis_cache_regions[172800]
-
-    assert region30.name == '30s'
-    assert region120.name == '2m'
-    assert region7200.name == '2h'
-    assert region172800.name == '2d'
+    region = cache.cache._redis_cache_regions[seconds]
+    assert region.name == expected_name
 
 
 def test_redis_cache_with_namespace(redis_docker):

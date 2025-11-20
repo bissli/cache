@@ -9,6 +9,12 @@ import tempfile
 import cache
 import pytest
 
+try:
+    import redis
+except ImportError:
+    raise Exception('redis package not installed, cannot test Redis functionality')
+
+
 logger = logging.getLogger(__name__)
 
 HERE = pathlib.Path(pathlib.Path(__file__).resolve()).parent
@@ -25,6 +31,17 @@ def reset_cache_config(request):
 
     is_redis_test = 'redis' in [marker.name for marker in request.node.iter_markers()]
 
+    if not is_redis_test:
+        is_redis_test = 'redis_docker' in request.fixturenames
+
+    if not is_redis_test and hasattr(request.node, 'callspec'):
+        params = request.node.callspec.params
+        is_redis_test = (
+            params.get('cache_type') == 'redis' or
+            params.get('fixture') == 'redis_docker' or
+            params.get('fixture_needed') == 'redis_docker'
+        )
+
     cache.configure(
         debug_key='test:',
         memory='dogpile.cache.memory_pickle',
@@ -36,6 +53,14 @@ def reset_cache_config(request):
         redis_ssl=False,
         redis_distributed=False
     )
+
+    if is_redis_test:
+        try:
+            r = redis.Redis(host='localhost', port=6379, db=0)
+            r.flushdb()
+            r.close()
+        except Exception:
+            pass
     yield
     cache.cache._memory_cache_regions.clear()
     cache.cache._file_cache_regions.clear()

@@ -77,73 +77,69 @@ def test_set_memorycache_key_with_defaults():
     assert call_count == 1
 
 
-def test_set_filecache_key_basic(temp_cache_dir):
-    """Verify setting a specific file cache key updates the cached value.
+@pytest.mark.parametrize(('cache_type', 'set_func', 'fixture'), [
+    ('file', cache.set_filecache_key, 'temp_cache_dir'),
+    ('redis', cache.set_rediscache_key, 'redis_docker'),
+])
+def test_set_cache_key_basic(cache_type, set_func, fixture, request):
+    """Verify setting a specific cache key updates the cached value.
     """
-    call_count = 0
+    if cache_type == 'redis':
+        pytest.importorskip('redis')
+    request.getfixturevalue(fixture)
 
-    @cache.filecache(seconds=300).cache_on_arguments(namespace='reports')
-    def generate_report(report_id: int) -> dict:
+    call_count = 0
+    cache_func = cache.filecache if cache_type == 'file' else cache.rediscache
+
+    @cache_func(seconds=300).cache_on_arguments(namespace='items')
+    def get_item(item_id: int) -> dict:
         nonlocal call_count
         call_count += 1
-        return {'id': report_id, 'data': 'original_report'}
+        return {'id': item_id, 'data': 'original_data'}
 
-    generate_report(100)
+    get_item(100)
     assert call_count == 1
 
-    cache.set_filecache_key(300, 'reports', generate_report, {'id': 100, 'data': 'updated_report'}, report_id=100)
+    set_func(300, 'items', get_item, {'id': 100, 'data': 'updated_data'}, item_id=100)
 
-    result = generate_report(100)
-    assert result['data'] == 'updated_report'
+    result = get_item(100)
+    assert result['data'] == 'updated_data'
     assert call_count == 1
 
 
-def test_set_filecache_key_multiple_params(temp_cache_dir):
-    """Verify setting file cache key with multiple parameters.
+@pytest.mark.parametrize(('cache_type', 'set_func', 'fixture'), [
+    ('file', cache.set_filecache_key, 'temp_cache_dir'),
+    ('redis', cache.set_rediscache_key, 'redis_docker'),
+])
+def test_set_cache_key_multiple_params(cache_type, set_func, fixture, request):
+    """Verify setting cache key with multiple parameters.
     """
-    call_count = 0
+    if cache_type == 'redis':
+        pytest.importorskip('redis')
+    request.getfixturevalue(fixture)
 
-    @cache.filecache(seconds=300).cache_on_arguments(namespace='analytics')
-    def get_analytics(user_id: int, metric: str, period: str) -> dict:
+    call_count = 0
+    cache_func = cache.filecache if cache_type == 'file' else cache.rediscache
+
+    @cache_func(seconds=300).cache_on_arguments(namespace='data')
+    def get_data(user_id: int, metric: str, period: str) -> dict:
         nonlocal call_count
         call_count += 1
         return {'user_id': user_id, 'metric': metric, 'period': period, 'value': 'original'}
 
-    get_analytics(123, 'views', 'daily')
-    get_analytics(123, 'views', 'weekly')
+    get_data(123, 'views', 'daily')
+    get_data(123, 'views', 'weekly')
     assert call_count == 2
 
-    cache.set_filecache_key(300, 'analytics', get_analytics, {'user_id': 123, 'metric': 'views', 'period': 'daily', 'value': 'updated'}, user_id=123, metric='views', period='daily')
+    set_func(300, 'data', get_data, {'user_id': 123, 'metric': 'views', 'period': 'daily', 'value': 'updated'}, user_id=123, metric='views', period='daily')
 
-    result = get_analytics(123, 'views', 'daily')
+    result = get_data(123, 'views', 'daily')
     assert result['value'] == 'updated'
     assert call_count == 2
 
-    result = get_analytics(123, 'views', 'weekly')
+    result = get_data(123, 'views', 'weekly')
     assert result['value'] == 'original'
     assert call_count == 2
-
-
-@pytest.mark.redis
-def test_set_rediscache_key_basic(redis_docker):
-    """Verify setting a specific redis cache key updates the cached value.
-    """
-    call_count = 0
-
-    @cache.rediscache(seconds=300).cache_on_arguments(namespace='products')
-    def get_product(product_id: int) -> dict:
-        nonlocal call_count
-        call_count += 1
-        return {'id': product_id, 'name': f'product_{product_id}'}
-
-    get_product(100)
-    assert call_count == 1
-
-    cache.set_rediscache_key(300, 'products', get_product, {'id': 100, 'name': 'updated_product'}, product_id=100)
-
-    result = get_product(100)
-    assert result['name'] == 'updated_product'
-    assert call_count == 1
 
 
 @pytest.mark.redis
@@ -174,31 +170,4 @@ def test_set_rediscache_key_use_case(redis_docker):
 
     result2 = get_target(target_id=456, key='main')
     assert result2['data'] == 'updated_data'
-    assert call_count == 2
-
-
-@pytest.mark.redis
-def test_set_rediscache_key_multiple_params(redis_docker):
-    """Verify setting redis cache key with multiple parameters.
-    """
-    call_count = 0
-
-    @cache.rediscache(seconds=300).cache_on_arguments(namespace='orders')
-    def get_order(user_id: int, order_id: int, status: str) -> dict:
-        nonlocal call_count
-        call_count += 1
-        return {'user_id': user_id, 'order_id': order_id, 'status': status, 'data': 'original'}
-
-    get_order(123, 789, 'pending')
-    get_order(123, 789, 'completed')
-    assert call_count == 2
-
-    cache.set_rediscache_key(300, 'orders', get_order, {'user_id': 123, 'order_id': 789, 'status': 'pending', 'data': 'updated'}, user_id=123, order_id=789, status='pending')
-
-    result = get_order(123, 789, 'pending')
-    assert result['data'] == 'updated'
-    assert call_count == 2
-
-    result = get_order(123, 789, 'completed')
-    assert result['data'] == 'original'
     assert call_count == 2

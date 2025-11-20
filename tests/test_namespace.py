@@ -1,44 +1,28 @@
 """Test key generation, namespace construction, and filtering logic.
 """
 import cache
+import pytest
 from cache.cache import _create_namespace_filter, _normalize_namespace
 from cache.cache import key_generator
 
 
-def test_normalize_namespace_simple():
-    """Verify simple namespace strings are wrapped correctly.
+@pytest.mark.parametrize(('input_ns', 'expected'), [
+    ('users', '|users|'),
+    ('api_data', '|api_data|'),
+    ('reports', '|reports|'),
+    ('|users|', '|users|'),
+    ('|api_data|', '|api_data|'),
+    ('user|admin', '|user.admin|'),
+    ('api|weather|data', '|api.weather.data|'),
+    ('|user|admin|', '|user.admin|'),
+    ('|api|data|', '|api.data|'),
+    ('', ''),
+    (None, ''),
+])
+def test_normalize_namespace(input_ns, expected):
+    """Verify namespace normalization handles various input formats correctly.
     """
-    assert _normalize_namespace('users') == '|users|'
-    assert _normalize_namespace('api_data') == '|api_data|'
-    assert _normalize_namespace('reports') == '|reports|'
-
-
-def test_normalize_namespace_already_wrapped():
-    """Verify already-wrapped namespaces remain unchanged.
-    """
-    assert _normalize_namespace('|users|') == '|users|'
-    assert _normalize_namespace('|api_data|') == '|api_data|'
-
-
-def test_normalize_namespace_with_internal_pipes():
-    """Verify internal pipes are replaced with periods.
-    """
-    assert _normalize_namespace('user|admin') == '|user.admin|'
-    assert _normalize_namespace('api|weather|data') == '|api.weather.data|'
-
-
-def test_normalize_namespace_with_leading_trailing_pipes():
-    """Verify leading/trailing pipes are stripped before internal pipe replacement.
-    """
-    assert _normalize_namespace('|user|admin|') == '|user.admin|'
-    assert _normalize_namespace('|api|data|') == '|api.data|'
-
-
-def test_normalize_namespace_empty():
-    """Verify empty namespace returns empty string.
-    """
-    assert _normalize_namespace('') == ''
-    assert _normalize_namespace(None) == ''
+    assert _normalize_namespace(input_ns) == expected
 
 
 def test_namespace_filter_matches_correctly():

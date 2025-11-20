@@ -185,82 +185,61 @@ def test_exclude_params_empty_set():
     assert call_count == 2
 
 
-def test_exclude_params_file_cache(temp_cache_dir):
-    """Verify exclude_params works with file cache backend.
+@pytest.mark.parametrize(('cache_func', 'fixture_needed'), [
+    (lambda: cache.filecache(seconds=300), 'temp_cache_dir'),
+    (lambda: cache.rediscache(seconds=300), 'redis_docker'),
+])
+def test_exclude_params_backend_single(cache_func, fixture_needed, request):
+    """Verify exclude_params works with different cache backends.
     """
+    if fixture_needed == 'redis_docker':
+        pytest.importorskip('redis')
+        request.getfixturevalue(fixture_needed)
+    elif fixture_needed == 'temp_cache_dir':
+        request.getfixturevalue(fixture_needed)
+
     call_count = 0
 
-    @cache.filecache(seconds=300).cache_on_arguments(exclude_params={'logger'})
-    def generate_report(logger, report_id: int) -> dict:
+    @cache_func().cache_on_arguments(exclude_params={'logger'})
+    def func(logger, item_id: int) -> dict:
         nonlocal call_count
         call_count += 1
-        return {'report_id': report_id}
+        return {'item_id': item_id}
 
-    generate_report('log1', 100)
-    generate_report('log2', 100)
-    generate_report('log3', 100)
+    func('log1', 100)
+    func('log2', 100)
+    func('log3', 100)
 
     assert call_count == 1
 
-    generate_report('log4', 200)
+    func('log4', 200)
 
     assert call_count == 2
 
 
-def test_exclude_params_file_cache_multiple(temp_cache_dir):
-    """Verify exclude_params works with multiple parameters in file cache.
+@pytest.mark.parametrize(('cache_func', 'fixture_needed'), [
+    (lambda: cache.filecache(seconds=300), 'temp_cache_dir'),
+    (lambda: cache.rediscache(seconds=300), 'redis_docker'),
+])
+def test_exclude_params_backend_multiple(cache_func, fixture_needed, request):
+    """Verify exclude_params works with multiple parameters in different backends.
     """
+    if fixture_needed == 'redis_docker':
+        pytest.importorskip('redis')
+        request.getfixturevalue(fixture_needed)
+    elif fixture_needed == 'temp_cache_dir':
+        request.getfixturevalue(fixture_needed)
+
     call_count = 0
 
-    @cache.filecache(seconds=300).cache_on_arguments(exclude_params={'session', 'timestamp'})
-    def get_analytics(session: str, timestamp: str, user_id: int, metric: str) -> dict:
+    @cache_func().cache_on_arguments(exclude_params={'param1', 'param2'})
+    def func(param1: str, param2: str, user_id: int, key: str) -> dict:
         nonlocal call_count
         call_count += 1
-        return {'user_id': user_id, 'metric': metric}
+        return {'user_id': user_id, 'key': key}
 
-    get_analytics('sess1', '2024-01-01', 123, 'views')
-    get_analytics('sess2', '2024-01-02', 123, 'views')
-
-    assert call_count == 1
-
-
-@pytest.mark.redis
-def test_exclude_params_redis_cache(redis_docker):
-    """Verify exclude_params works with Redis cache backend.
-    """
-    call_count = 0
-
-    @cache.rediscache(seconds=300).cache_on_arguments(exclude_params={'logger'})
-    def fetch_product(logger, product_id: int) -> dict:
-        nonlocal call_count
-        call_count += 1
-        return {'product_id': product_id}
-
-    fetch_product('log1', 100)
-    fetch_product('log2', 100)
-    fetch_product('log3', 100)
-
-    assert call_count == 1
-
-    fetch_product('log4', 200)
-
-    assert call_count == 2
-
-
-@pytest.mark.redis
-def test_exclude_params_redis_cache_multiple(redis_docker):
-    """Verify exclude_params works with multiple parameters in Redis cache.
-    """
-    call_count = 0
-
-    @cache.rediscache(seconds=300).cache_on_arguments(exclude_params={'request_id', 'trace_id'})
-    def process_order(request_id: str, trace_id: str, order_id: int, status: str) -> dict:
-        nonlocal call_count
-        call_count += 1
-        return {'order_id': order_id, 'status': status}
-
-    process_order('req1', 'trace1', 789, 'pending')
-    process_order('req2', 'trace2', 789, 'pending')
+    func('val1', 'val2', 123, 'test')
+    func('val3', 'val4', 123, 'test')
 
     assert call_count == 1
 
