@@ -146,24 +146,6 @@ def test_clear_redis_cache_by_namespace(redis_docker):
     cache.clear_rediscache(seconds=300, namespace='users')
 
 
-@pytest.mark.redis
-def test_clear_all_redis_regions(redis_docker):
-    """Verify clearing without seconds parameter clears all Redis regions.
-    """
-    @cache.rediscache(seconds=60).cache_on_arguments()
-    def func1(x: int) -> int:
-        return x
-
-    @cache.rediscache(seconds=300).cache_on_arguments()
-    def func2(x: int) -> int:
-        return x
-
-    func1(1)
-    func2(2)
-
-    cache.clear_rediscache()
-
-
 def test_clear_namespace_across_all_regions():
     """Verify clearing namespace without seconds clears across all regions.
     """
@@ -183,3 +165,62 @@ def test_clear_namespace_across_all_regions():
     for region in cache.cache._memory_cache_regions.values():
         cache_dict = region.actual_backend._cache
         assert len(cache_dict) == 0
+
+
+@pytest.mark.redis
+def test_clear_redis_without_registration(redis_docker):
+    """Verify clearing works without region registration (cross-machine scenario).
+    """
+    @cache.rediscache(seconds=300).cache_on_arguments(namespace='test')
+    def func(x: int) -> int:
+        return x
+
+    func(1)
+
+    # Simulate different process - clear in-memory registration
+    cache.cache._redis_cache_regions.clear()
+
+    # Should still work by connecting directly to Redis
+    cache.clear_rediscache(seconds=300, namespace='test')
+
+    # Verify key is deleted
+    client = cache.cache._get_redis_client()
+    keys = list(client.scan_iter(match='5m:*'))
+    assert len(keys) == 0
+
+
+@pytest.mark.redis
+def test_clear_redis_namespace_across_all_regions(redis_docker):
+    """Verify clearing namespace without seconds clears across all regions.
+    """
+    @cache.rediscache(seconds=60).cache_on_arguments(namespace='users')
+    def func1(x: int) -> int:
+        return x
+
+    @cache.rediscache(seconds=300).cache_on_arguments(namespace='users')
+    def func2(x: int) -> int:
+        return x
+
+    @cache.rediscache(seconds=300).cache_on_arguments(namespace='products')
+    def func3(x: int) -> int:
+        return x
+
+    func1(1)
+    func2(2)
+    func3(3)
+
+    # Clear 'users' namespace across all regions
+    cache.clear_rediscache(namespace='users')
+
+    # Verify 'users' keys are deleted, 'products' key remains
+    client = cache.cache._get_redis_client()
+    keys = [k.decode() for k in client.scan_iter(match='*:*')]
+    assert not any('|users|' in k for k in keys)
+    assert any('|products|' in k for k in keys)
+
+
+def test_clear_redis_no_args_raises_error():
+    """Verify calling clear_rediscache() with no args raises ValueError.
+    """
+    with pytest.raises(ValueError):
+        cache.clear_rediscache()

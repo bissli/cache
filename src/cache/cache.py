@@ -11,7 +11,6 @@ from dogpile.cache import CacheRegion, make_region
 from dogpile.cache.backends.file import AbstractFileLock
 from dogpile.cache.region import DefaultInvalidationStrategy
 from dogpile.util.readwrite_lock import ReadWriteMutex
-from func_timeout import func_timeout
 
 from .config import get_config
 
@@ -151,6 +150,44 @@ def should_cache_fn(value: Any) -> bool:
         True if the value should be cached, False otherwise.
     """
     return bool(value)
+
+
+def _seconds_to_region_name(seconds: int) -> str:
+    """Convert seconds to a human-readable region name.
+
+    Parameters
+        seconds: The expiration time in seconds.
+
+    Returns
+        A short region name (e.g., '30s', '5m', '12h', '2d').
+    """
+    if seconds < 60:
+        return f'{seconds}s'
+    elif seconds < 3600:
+        return f'{seconds // 60}m'
+    elif seconds < 86400:
+        return f'{seconds // 3600}h'
+    else:
+        return f'{seconds // 86400}d'
+
+
+def _get_redis_client():
+    """Create a Redis client directly from config.
+
+    Returns
+        A redis.Redis client instance.
+    """
+    import redis
+    _config = get_config()
+    connection_kwargs = {}
+    if _config.redis_ssl:
+        connection_kwargs['ssl'] = True
+    return redis.Redis(
+        host=_config.redis_host,
+        port=_config.redis_port,
+        db=_config.redis_db,
+        **connection_kwargs
+    )
 
 
 class CacheRegionWrapper:
@@ -389,14 +426,7 @@ def rediscache(seconds: int) -> CacheRegionWrapper:
     """
     if seconds not in _redis_cache_regions:
         _config = get_config()
-        if seconds < 60:
-            name = f'{seconds}s'
-        elif seconds < 3600:
-            name = f'{seconds // 60}m'
-        elif seconds < 86400:
-            name = f'{seconds // 3600}h'
-        else:
-            name = f'{seconds // 86400}d'
+        name = _seconds_to_region_name(seconds)
 
         region = make_region(name=name, function_key_generator=key_generator,
                              key_mangler=partial(key_mangler_region, region=name))
@@ -484,40 +514,56 @@ def clear_filecache(seconds: int | None = None, namespace: str | None = None) ->
         logger.debug(f'Cleared {len(keys_to_delete)} file cache keys for namespace "{namespace}"')
 
 
-@_handle_all_regions(_redis_cache_regions, log_level='info')
 def clear_rediscache(seconds: int | None = None, namespace: str | None = None) -> None:
     """Clear a redis cache region.
 
-    When decorated, supports seconds=None to clear all regions.
-
     Parameters
-        seconds: Expiration time in seconds that identifies the region to clear
-        namespace: Optional namespace to filter which keys to clear
+        seconds: Expiration time in seconds that identifies the region to clear.
+                 If None, namespace must be provided to clear across all regions.
+        namespace: Optional namespace to filter which keys to clear.
+                   If None, clears all keys in the specified region.
+
+    Raises
+        ValueError: If both seconds and namespace are None.
     """
-    if seconds not in _redis_cache_regions:
-        logger.info(f'No redis cache region exists for {seconds} seconds')
-        return
+    if seconds is None and namespace is None:
+        raise ValueError('Must specify seconds, namespace, or both')
 
-    region = _redis_cache_regions[seconds]
+    _config = get_config()
+    client = _get_redis_client()
+    deleted_count = 0
 
-    if namespace is None:
-        func_timeout(60, region.region_invalidator.invalidate)
-        logger.debug(f'Invalidated Redis cache region "{region.name}"')
-    else:
-        _config = get_config()
-        client = region.backend.writer_client
-        region_name = region.name
-        debug_prefix = _config.debug_key
-        region_prefix = f'{region_name}:{debug_prefix}'
-        matches_namespace = _create_namespace_filter(namespace)
-        deleted_count = 0
-        for key in client.scan_iter(match=f'{region_prefix}*'):
-            key_str = key.decode()
-            key_without_region = key_str[len(region_name) + 1:]
-            if matches_namespace(key_without_region):
+    if seconds is not None:
+        region_name = _seconds_to_region_name(seconds)
+        region_prefix = f'{region_name}:{_config.debug_key}'
+
+        if namespace is None:
+            # Clear all keys in region
+            for key in client.scan_iter(match=f'{region_prefix}*'):
                 client.delete(key)
                 deleted_count += 1
-        logger.debug(f'Cleared {deleted_count} Redis cache keys for namespace "{namespace}"')
+            logger.debug(f'Cleared {deleted_count} Redis keys for region "{region_name}"')
+        else:
+            # Clear namespace in region
+            matches_namespace = _create_namespace_filter(namespace)
+            for key in client.scan_iter(match=f'{region_prefix}*'):
+                key_str = key.decode()
+                key_without_region = key_str[len(region_name) + 1:]
+                if matches_namespace(key_without_region):
+                    client.delete(key)
+                    deleted_count += 1
+            logger.debug(f'Cleared {deleted_count} Redis keys for namespace "{namespace}" in region "{region_name}"')
+    else:
+        # namespace only - clear across ALL regions
+        matches_namespace = _create_namespace_filter(namespace)
+        for key in client.scan_iter(match=f'*:{_config.debug_key}*'):
+            key_str = key.decode()
+            if ':' in key_str:
+                key_without_region = key_str.split(':', 1)[1]
+                if matches_namespace(key_without_region):
+                    client.delete(key)
+                    deleted_count += 1
+        logger.debug(f'Cleared {deleted_count} Redis keys for namespace "{namespace}" across all regions')
 
 
 def set_memorycache_key(seconds: int, namespace: str, fn: Callable[..., Any], value: Any, **kwargs) -> None:
